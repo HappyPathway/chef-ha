@@ -1,0 +1,13 @@
+---
+- hosts: all
+  tasks:
+    - name: upload base dir
+      copy: src="{{ playbook_dir }}/" dest=/tmp/chef/
+      tags:
+        - upload
+
+    - name: install cookbook
+      shell: wget -qO- https://supermarket.chef.io/cookbooks/{{ cookbook }}/download | tar xvzC /tmp/chef/cookbooks/
+      when: cookbook is defined
+      tags:
+        - install
