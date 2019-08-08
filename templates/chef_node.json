@@ -2,13 +2,5 @@
     "run_list": [
         "recipe[chef-server]",
         "recipe[chef-ha]"
-    ],
-    "normal": {
-        "chef_cluster_master": "${chef_cluster_master}",
-        "chef_config_bucket": "${chef_config_bucket}",
-        "chef_config_path": "${chef_config_path}",
-        "chef-server": {
-            "accept_license": true
-        }
-    }
+    ]
 }

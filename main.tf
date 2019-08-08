@@ -13,7 +13,7 @@ data "template_file" "chef_cookbook_attributes" {
     chef_cluster_master = "${var.chef_cluster_master}"
     chef_backend_version = "${var.chef_backend_version}"
     chef_frontend_version = "${var.chef_frontend_version}"
-    auth_cidr_addresses = "${var.chef_auth_cidr_addresses}"
+    chef_auth_cidr_addresses = "${var.chef_auth_cidr_addresses}"
   }
 }
 
@@ -21,17 +21,22 @@ data "template_file" "setup" {
   template = "${file("${path.module}/templates/setup.sh")}"
 
   vars = {
-    nodename = "${var.nodename}"
+    nodename = "${aws_instance.chef-client.private_dns}"
     chef_environment    = "${var.chef_environment}"
     chef_version = "${var.chef_version}"
     os_version = "${var.os_version}"
   }
 }
 
+data "template_file" "node" {
+  template = "${file("${path.module}/templates/chef_node.json")}"
+}
+
 resource "local_file" "chef_cookbook_attributes" {
   content  = "${data.template_file.chef_cookbook_attributes.rendered}"
   filename = "${path.module}/cookbooks/chef-ha/attributes/default.rb"
 }
+
 
 
 resource "local_file" "setup" {
@@ -55,9 +60,9 @@ data "aws_ami" "ubuntu" {
   owners = ["099720109477"] # Canonical
 }
 
-resource "aws_instance" "web" {
+resource "aws_instance" "chef-client" {
+  count = "${var.chef_slave_count}"
   depends_on = [
-    "local_file.node",
     "local_file.chef_cookbook_attributes"
   ]
 
@@ -83,12 +88,6 @@ resource "aws_instance" "web" {
     ]
   }
 
-  # Copies the configs.d folder to /etc/configs.d
-  provisioner "file" {
-    source      = "./"
-    destination = "/tmp/chef"
-  }
-
   provisioner "remote-exec" {
     inline = [
       "sudo apt-get update",
@@ -96,11 +95,41 @@ resource "aws_instance" "web" {
   }
 }
 
+resource "local_file" "node" {
+  content  = "${data.template_file.node.rendered}"
+  filename = "${path.module}/nodes/${aws_instance.chef-client.private_dns}.json"
+}
+
+resource "null_resource" "provisioner" {
+  # Copies the configs.d folder to /etc/configs.d
+  depends_on = [
+    "local_file.node"
+  ]
+  count = "${var.chef_slave_count}"
+  
+  triggers = {
+    instance_ids = "${join(",", aws_instance.chef-client.*.id)}"
+  }
+
+  connection {
+    type = "ssh"
+    user = "ubuntu"
+    host = "${element(aws_eip.ip.*.public_ip, count.index)}"
+  }
+
+  provisioner "file" {
+    source      = "${path.module}/"
+    destination = "/tmp/chef"
+  }
+
+}
+
 resource "aws_eip" "ip" {
-  instance = "${aws_instance.web.id}"
+  count = "${var.chef_slave_count}"
+  instance = "${element(aws_instance.chef-client.*.id, count.index)}"
   vpc      = true
 }
 
 output "ip_address" {
-  value = "${aws_eip.ip.public_ip}"
+  value = "${aws_eip.ip.*.public_ip}"
 }

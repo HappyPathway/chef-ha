@@ -23,3 +23,16 @@ variable "os_version" {
 variable "os_nickname" {
     default = "bionic"
 }
+
+
+variable "chef_backend_version" {
+    default = "2.0.1"
+}
+
+variable "chef_frontend_version" {
+    default = "12.19.31"
+}
+
+variable "chef_slave_count" {
+    default = 1
+}
